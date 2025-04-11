@@ -13,8 +13,8 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: 'white', // slightly transparent white
     borderRadius: 12,
-    borderWidth: 2,
-    borderColor: 'black',
+    borderWidth: 3,
+    borderColor: 'white',
     shadowColor: 'black',
     shadowOffset: {
       width: 6,

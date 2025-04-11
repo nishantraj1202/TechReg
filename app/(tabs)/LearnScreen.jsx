@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Modal } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Modal,Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import NeoBrutalismCard from '../components/NeoBrutalismCard';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -111,7 +111,17 @@ export default function LearnScreen() {
     await AsyncStorage.setItem('userLanguage', langCode);
     setShowLanguageModal(false);
   };
-
+  const openArticle = async () => {
+    const url = 'https://globalnaps.org/issue/workers-rights/';
+    const supported = await Linking.canOpenURL(url);
+  
+    if (supported) {
+      await Linking.openURL(url);
+    } else {
+      Alert.alert(`Can't open this URL: ${url}`);
+    }
+  };
+  
   return (
     <SafeAreaView style={styles.container}>
       <LinearGradient
@@ -186,7 +196,8 @@ export default function LearnScreen() {
             <Text style={styles.sectionHeader}>Legal Knowledge Hub</Text>
             <View style={styles.legalGrid}>
               {LEGAL_RESOURCES.map((resource, index) => (
-                <TouchableOpacity 
+                <TouchableOpacity onPress={openArticle}
+                
                   key={resource.id}
                   style={styles.legalCard}
                 >

@@ -1,332 +1,304 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Dimensions } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { VictoryPie, VictoryBar, VictoryChart, VictoryAxis, VictoryTheme } from 'victory-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Animatable from 'react-native-animatable';
-import { LinearGradient } from 'expo-linear-gradient';
-import { format } from 'date-fns';
-import NeoBrutalismCard from './NeoBrutalismCard';
+import React from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert } from 'react-native';
+import { Picker } from '@react-native-picker/picker';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
-const { width } = Dimensions.get('window');
+import { useRouter } from 'expo-router';
+const [date, setDate] = React.useState(new Date());
 
-const PLATFORMS = ['Zomato', 'Swiggy', 'Uber', 'Ola'];
-const EXPENSE_CATEGORIES = ['Petrol', 'Bike Repair', 'Other'];
+const EarningDetail = () => {
+  const router=useRouter();
+  const [earningSource, setEarningSource] = React.useState('Swiggy');
+  const [earningAmount, setEarningAmount] = React.useState('');
+  const [expenseCategory, setExpenseCategory] = React.useState('Petrol');
+  const [expenseAmount, setExpenseAmount] = React.useState('');
+  const [date, setDate] = React.useState(new Date());
 
-export default function EarningsDetail({ onClose }) {
-  const [monthlyGoal, setMonthlyGoal] = useState(20000);
-  const [monthlyEarnings, setMonthlyEarnings] = useState(0);
-  const [platformEarnings, setPlatformEarnings] = useState({});
-  const [expenses, setExpenses] = useState({});
-  const [otherExpenseNote, setOtherExpenseNote] = useState('');
-  const [showGoalInput, setShowGoalInput] = useState(false);
-  const [newGoal, setNewGoal] = useState('');
 
-  React.useEffect(() => {
-    loadData();
-  }, []);
+  const API_BASE_URL = 'https://gigbackpart.onrender.com'; // change this to your actual backend URL
 
-  const loadData = async () => {
+ 
+
+  const handleSaveEarning = async () => {
+    if (!earningAmount) {
+      Alert.alert('Validation', 'Please enter the earning amount');
+      return;
+    }
+  
+    const currentDate = new Date();
+  
     try {
-      const storedData = await AsyncStorage.getItem('earningsData');
-      if (storedData) {
-        const data = JSON.parse(storedData);
-        setMonthlyGoal(data.monthlyGoal || 20000);
-        setMonthlyEarnings(data.monthlyEarnings || 0);
-        setPlatformEarnings(data.platformEarnings || {});
-        setExpenses(data.expenses || {});
+      const response = await fetch(`${API_BASE_URL}/earning`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          platform: earningSource,
+          amount: parseFloat(earningAmount),
+          date: currentDate.toISOString(),
+        }),
+      });
+  
+      const result = await response.json();
+      if (response.ok) {
+        Alert.alert('Success', 'Earning saved successfully');
+        setEarningAmount(''); // clear earning amount input
+      } else {
+        Alert.alert('Error', result.message || 'Something went wrong');
       }
     } catch (error) {
-      console.error('Error loading data:', error);
+      Alert.alert('Error', error.message);
     }
   };
 
-  const saveData = async () => {
+  const handleSaveExpense = async () => {
+    if (!expenseAmount) {
+      Alert.alert('Validation', 'Please enter the expense amount');
+      return;
+    }
+  
+    const currentDate = new Date();
+  
     try {
-      const data = {
-        monthlyGoal,
-        monthlyEarnings,
-        platformEarnings,
-        expenses,
-      };
-      await AsyncStorage.setItem('earningsData', JSON.stringify(data));
+      const response = await fetch(`${API_BASE_URL}/expense`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: expenseCategory,
+          amount: parseFloat(expenseAmount),
+          date: currentDate.toISOString(),
+        }),
+      });
+  
+      const result = await response.json();
+      if (response.ok) {
+        Alert.alert('Success', 'Expense saved successfully');
+        setExpenseAmount('');
+      } else {
+        Alert.alert('Error', result.message || 'Something went wrong');
+      }
     } catch (error) {
-      console.error('Error saving data:', error);
+      Alert.alert('Error', error.message);
     }
   };
+  
+  const handleGenerateReport = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/report`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          date: date.toISOString().split('T')[0], // YYYY-MM-DD format
+        }),
+      });
 
-  const updatePlatformEarning = (platform, amount) => {
-    const newEarnings = {
-      ...platformEarnings,
-      [platform]: parseFloat(amount) || 0,
-    };
-    setPlatformEarnings(newEarnings);
-    updateMonthlyEarnings(newEarnings);
-  };
-
-  const updateExpense = (category, amount) => {
-    setExpenses({
-      ...expenses,
-      [category]: parseFloat(amount) || 0,
-    });
-  };
-
-  const updateMonthlyEarnings = (newEarnings) => {
-    const total = Object.values(newEarnings).reduce((sum, val) => sum + val, 0);
-    setMonthlyEarnings(total);
-  };
-
-  const getTotalExpenses = () => {
-    return Object.values(expenses).reduce((sum, val) => sum + val, 0);
-  };
-
-  const getNetEarnings = () => {
-    const totalEarnings = Object.values(platformEarnings).reduce((sum, val) => sum + val, 0);
-    const totalExpenses = getTotalExpenses();
-    return totalEarnings - totalExpenses;
-  };
-
-  const getProgressPercentage = () => {
-    return (monthlyEarnings / monthlyGoal) * 100;
-  };
-
-  const updateMonthlyGoal = () => {
-    const goal = parseFloat(newGoal);
-    if (goal > 0) {
-      setMonthlyGoal(goal);
-      setShowGoalInput(false);
-      setNewGoal('');
-      saveData();
+      const result = await response.json();
+      if (response.ok) {
+        Alert.alert('Report', JSON.stringify(result, null, 2));
+      } else {
+        Alert.alert('Error', result.message || 'Unable to fetch report');
+      }
+    } catch (error) {
+      Alert.alert('Error', error.message);
     }
   };
-
-  const chartData = PLATFORMS.map(platform => ({
-    x: platform,
-    y: platformEarnings[platform] || 0,
-  }));
 
   return (
-    <SafeAreaView style={styles.container}>
-      <LinearGradient
-        colors={['#4facfe', '#00f2fe']}
-        style={styles.gradient}
-      >
-        <ScrollView style={styles.scrollView}>
-          <TouchableOpacity 
+    <ScrollView contentContainerStyle={styles.container}>
+      <TouchableOpacity 
             style={styles.backButton}
-            onPress={onClose}
+            onPress={() => router.back()}
           >
             <Text style={styles.backButtonText}>← Back</Text>
           </TouchableOpacity>
+      <Text style={styles.heading}>Add Earning</Text>
+      <Text style={styles.label}>Source</Text>
+      <View style={styles.dropdown}>
+        <Picker selectedValue={earningSource} onValueChange={(itemValue) => setEarningSource(itemValue)}>
+          <Picker.Item label="Swiggy" value="Swiggy" />
+          <Picker.Item label="Zomato" value="Zomato" />
+          <Picker.Item label="zepto" value="zepto" />
+          <Picker.Item label="zomato" value="zomato" />
+          <Picker.Item label="ola" value="ola" />
+        </Picker>
+      </View>
+      <Text style={styles.label}>Amount</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="Amount"
+        keyboardType="numeric"
+        value={earningAmount}
+        onChangeText={setEarningAmount}
+      />
+      <TouchableOpacity style={styles.saveButtonGreen} onPress={handleSaveEarning}>
+        <Text style={styles.saveButtonText}>Save</Text>
+      </TouchableOpacity>
 
-          <Animatable.View animation="fadeInDown">
-            <NeoBrutalismCard style={styles.totalCard}>
-              <Text style={styles.totalTitle}>Total Earnings</Text>
-              <Text style={styles.totalAmount}>$2,450.00</Text>
-              <Text style={styles.period}>This Week</Text>
-            </NeoBrutalismCard>
-          </Animatable.View>
+      <Text style={[styles.heading, { marginTop: 30 }]}>Add Expense</Text>
+      <Text style={styles.label}>Category</Text>
+      <View style={styles.dropdown}>
+        <Picker selectedValue={expenseCategory} onValueChange={(itemValue) => setExpenseCategory(itemValue)}>
+          <Picker.Item label="Petrol" value="Petrol" />
+          <Picker.Item label="Food" value="Food" />
+          <Picker.Item label="toll" value="toll" />
+        </Picker>
+      </View>
+      <Text style={styles.label}>Amount</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="Amount"
+        keyboardType="numeric"
+        value={expenseAmount}
+        onChangeText={setExpenseAmount}
+      />
+      <TouchableOpacity style={styles.saveButtonRed} onPress={handleSaveExpense}>
+        <Text style={styles.saveButtonText}>Save</Text>
+      </TouchableOpacity>
+{/* 
+      <Text style={[styles.heading, { marginTop: 30 }]}>Generate Report</Text>
+      <View style={styles.row}>
+        <TouchableOpacity onPress={() => setShowDatePicker(true)} style={styles.dateInput}>
+          <Text>{date.toLocaleDateString('en-GB')}</Text>
+        </TouchableOpacity>
+        <Text style={{ marginLeft: 10 }}>Target</Text>
+      </View> */}
 
-          <Animatable.View animation="fadeInUp" delay={200}>
-            <NeoBrutalismCard style={styles.sectionCard}>
-              <Text style={styles.sectionTitle}>Platform Earnings</Text>
-              {PLATFORMS.map((platform) => (
-                <View key={platform} style={styles.inputRow}>
-                  <Text style={styles.inputLabel}>{platform}</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={platformEarnings[platform]?.toString() || ''}
-                    onChangeText={(value) => updatePlatformEarning(platform, value)}
-                    keyboardType="numeric"
-                    placeholder="0.00"
-                  />
-                </View>
-              ))}
-            </NeoBrutalismCard>
-          </Animatable.View>
+      {/* {showDatePicker && (
+        <DateTimePicker
+          value={date}
+          mode="date"
+          display="default"
+          onChange={(event, selectedDate) => {
+            const currentDate = selectedDate || date;
+            setShowDatePicker(false);
+            setDate(currentDate);
+          }}
+        />
+      )} */}
 
-          <Animatable.View animation="fadeInUp" delay={400}>
-            <NeoBrutalismCard style={styles.sectionCard}>
-              <Text style={styles.sectionTitle}>Expenses</Text>
-              {EXPENSE_CATEGORIES.map((category) => (
-                <View key={category} style={styles.inputRow}>
-                  <Text style={styles.inputLabel}>{category}</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={expenses[category]?.toString() || ''}
-                    onChangeText={(value) => updateExpense(category, value)}
-                    keyboardType="numeric"
-                    placeholder="0.00"
-                  />
-                </View>
-              ))}
-              {expenses['Other'] > 0 && (
-                <TextInput
-                  style={styles.noteInput}
-                  value={otherExpenseNote}
-                  onChangeText={setOtherExpenseNote}
-                  placeholder="Note for other expense"
-                />
-              )}
-            </NeoBrutalismCard>
-          </Animatable.View>
-
-          <Animatable.View animation="fadeInUp" delay={600}>
-            <NeoBrutalismCard style={styles.summaryCard}>
-              <Text style={styles.sectionTitle}>Today's Summary</Text>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Total Earnings:</Text>
-                <Text style={styles.summaryAmount}>₹{Object.values(platformEarnings).reduce((sum, val) => sum + val, 0).toFixed(2)}</Text>
-              </View>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Total Expenses:</Text>
-                <Text style={[styles.summaryAmount, { color: '#e74c3c' }]}>₹{getTotalExpenses().toFixed(2)}</Text>
-              </View>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Net Earnings:</Text>
-                <Text style={[styles.summaryAmount, { color: getNetEarnings() >= 0 ? '#2ecc71' : '#e74c3c' }]}>
-                  ₹{getNetEarnings().toFixed(2)}
-                </Text>
-              </View>
-            </NeoBrutalismCard>
-          </Animatable.View>
-
-          <Animatable.View animation="fadeInUp" delay={700}>
-            <NeoBrutalismCard style={styles.chartCard}>
-              <Text style={styles.sectionTitle}>Earnings Distribution</Text>
-              <VictoryPie
-                data={chartData}
-                width={width - 80}
-                height={200}
-                colorScale={['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4']}
-                innerRadius={30}
-                labelRadius={({ innerRadius }) => (innerRadius + 80)}
-                style={{ labels: { fill: 'black', fontSize: 12, fontWeight: 'bold' } }}
-              />
-            </NeoBrutalismCard>
-          </Animatable.View>
-
-          <TouchableOpacity style={styles.saveButton} onPress={saveData}>
-            <Text style={styles.saveButtonText}>Save Today's Data</Text>
-          </TouchableOpacity>
-        </ScrollView>
-      </LinearGradient>
-    </SafeAreaView>
+      <TouchableOpacity style={styles.reportButton} onPress={handleGenerateReport}>
+        <Text style={styles.reportButtonText}>submmit today detail</Text>
+      </TouchableOpacity>
+    </ScrollView>
   );
-}
+};
+
+// ... keep styles unchanged ...
+
+
 
 const styles = StyleSheet.create({
   container: {
+    padding: 24,
+    backgroundColor: '#f9f9f9',
     flex: 1,
   },
-  gradient: {
-    flex: 1,
-  },
-  scrollView: {
-    padding: 20,
-  },
-  backButton: {
-    marginBottom: 20,
-  },
-  backButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  totalCard: {
-    padding: 20,
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  totalTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    marginBottom: 10,
-  },
-  totalAmount: {
-    fontSize: 36,
+
+  heading: {
+    fontSize: 24,
     fontWeight: '800',
-    color: '#2ECC71',
-    marginBottom: 5,
+    color: '#333',
+    marginBottom: 16,
   },
-  period: {
-    fontSize: 14,
-    color: '#666',
-  },
-  sectionCard: {
-    padding: 20,
-    marginBottom: 20,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 15,
-  },
-  inputRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-    backgroundColor: '#f8f9fa',
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: '#000',
-  },
-  inputLabel: {
+
+  label: {
     fontSize: 16,
-    fontWeight: '500',
-    color: '#2c3e50',
+    color: '#555',
+    marginVertical: 6,
   },
+
+  dropdown: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 10,
+    marginBottom: 12,
+    backgroundColor: '#fff',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+  },
+
   input: {
     borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 8,
-    width: 120,
-    textAlign: 'right',
-  },
-  noteInput: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 12,
-    marginTop: 8,
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    borderColor: '#ccc',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     marginBottom: 12,
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-  },
-  summaryLabel: {
+    backgroundColor: '#fff',
     fontSize: 16,
-    color: '#2c3e50',
+    color: '#333',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
   },
-  summaryAmount: {
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  chartCard: {
-    padding: 20,
-    marginBottom: 20,
+
+  saveButtonGreen: {
+    backgroundColor: '#28a745',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 10,
     alignItems: 'center',
+    marginTop: 10,
+    elevation: 3,
   },
-  saveButton: {
-    backgroundColor: '#2ecc71',
-    padding: 16,
-    borderRadius: 12,
+
+  saveButtonRed: {
+    backgroundColor: '#dc3545',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 10,
     alignItems: 'center',
-    marginVertical: 16,
-    borderWidth: 2,
-    borderColor: '#000',
+    marginTop: 10,
+    elevation: 3,
   },
+
   saveButtonText: {
-    color: 'white',
-    fontSize: 16,
+    color: '#fff',
     fontWeight: '700',
+    fontSize: 17,
+    letterSpacing: 0.5,
+  },
+
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 20,
+    gap: 10,
+  },
+
+  dateInput: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 10,
+    padding: 12,
+    backgroundColor: '#fff',
+    flex: 1,
+    fontSize: 16,
+  },
+
+  reportButton: {
+    backgroundColor: '#222',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    elevation: 3,
+    margin:10
+  },
+
+  reportButtonText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 17,
+    letterSpacing: 0.5,
   },
 });
+
+
+export default EarningDetail;

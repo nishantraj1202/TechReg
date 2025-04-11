@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Dimensions, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import NeoBrutalismCard from './components/NeoBrutalismCard';
 import { Picker } from '@react-native-picker/picker';
-import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import * as Animatable from 'react-native-animatable';
 import { LinearGradient } from 'expo-linear-gradient';
 
 const { width } = Dimensions.get('window');
+
+// Update this to your actual backend URL
+const API_BASE_URL = 'https://gigbackpart.onrender.com'; // For physical devices: 'http://YOUR_LOCAL_IP:3000'
 
 export default function RaiseConcern() {
   const router = useRouter();
@@ -16,24 +18,62 @@ export default function RaiseConcern() {
   const [address, setAddress] = useState('');
   const [category, setCategory] = useState('fraud');
   const [description, setDescription] = useState('');
-  const [attachment, setAttachment] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const pickImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.All,
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 1,
-    });
-
-    if (!result.canceled) {
-      setAttachment(result.assets[0].uri);
+  const handleSubmit = async () => {
+    if (!name || !address || !description) {
+      Alert.alert('Validation Error', 'Please fill all required fields');
+      return;
     }
-  };
-
-  const handleSubmit = () => {
-    console.log({ name, address, category, description, attachment });
-    router.back();
+  
+    setIsSubmitting(true);
+  
+    try {
+      console.log('Submitting form data:', { name, address, category, description });
+  
+      const response = await fetch(`${API_BASE_URL}/submit-mail`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name,
+          address,
+          category,
+          description
+        }),
+      });
+  
+      console.log('Response status:', response.status);
+  
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to submit concern');
+      }
+  
+      const result = await response.json();
+      console.log('Success:', result);
+  
+      // Alert and then go back
+      Alert.alert('Success', 'Concern submitted successfully', [
+        {
+          text: 'OK',
+          onPress: () => router.back(),
+        },
+      ]);
+  
+      // Optionally reset form fields
+      setName('');
+      setAddress('');
+      setCategory('fraud');
+      setDescription('');
+  
+    } catch (error) {
+      console.error('Submission error:', error);
+      Alert.alert('Error', error.message);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -118,29 +158,15 @@ export default function RaiseConcern() {
                 </View>
               </Animatable.View>
 
-              <Animatable.View animation="fadeInUp" delay={700}>
-                <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Supporting Documents</Text>
-                  <TouchableOpacity 
-                    style={styles.attachButton} 
-                    onPress={pickImage}
-                  >
-                    <Text style={styles.attachButtonText}>
-                      {attachment ? '📎 File Attached' : '📎 Add Files'}
-                    </Text>
-                    <Text style={styles.attachSubtext}>
-                      Upload relevant documents or images
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </Animatable.View>
-
               <Animatable.View animation="fadeInUp" delay={800}>
                 <TouchableOpacity 
-                  style={styles.submitButton}
+                  style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
                   onPress={handleSubmit}
+                  disabled={isSubmitting}
                 >
-                  <Text style={styles.submitButtonText}>Submit Concern</Text>
+                  <Text style={styles.submitButtonText}>
+                    {isSubmitting ? 'Submitting...' : 'Submit Concern'}
+                  </Text>
                 </TouchableOpacity>
                 
                 <Text style={styles.disclaimer}>
@@ -155,13 +181,13 @@ export default function RaiseConcern() {
   );
 }
 
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
   background: {
     flex: 1,
-    backgroundColor:"orange"
   },
   scrollView: {
     padding: 20,
